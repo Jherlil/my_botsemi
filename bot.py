@@ -1,7 +1,7 @@
 import time
 import pandas as pd
 from iqoptionapi.stable_api import IQ_Option
-from utils import log, load_config
+from utils import log, load_config, entry_strength
 from fundamental import FundamentalAnalyzer
 from technical import TechnicalAnalyzer
 from risk import RiskManager
@@ -107,7 +107,12 @@ def main():
             avg_volume = df['volume'].rolling(config['volume_period']).mean().iloc[-1]
             volume_ratio = last_candle.volume / avg_volume if avg_volume > 0 else 0
 
-            high_chance_basic = all([breakout, pattern_name, volume_ratio > 1.0, trend != "flat"])
+            high_chance_basic = all([
+                breakout,
+                pattern_name,
+                volume_ratio > 1.0,
+                trend != "flat",
+            ])
 
             # Monta features para o modelo de ML
             features = {
@@ -122,9 +127,10 @@ def main():
                 "adx14": float(df['ADX14'].iloc[-1]),
                 "atr14": float(df['ATR14'].iloc[-1]),
             }
+            ml_high = ml.predict_high_chance(features)
 
             if breakout and risk.can_trade(asset):
-                # Define direção
+                # Define direção somente a favor da tendência
                 direction = None
                 if breakout == "breakout_up" and trend == "up":
                     direction = "call"
@@ -133,22 +139,59 @@ def main():
                 if not direction:
                     continue
 
-                # Confere alta chance pelo ML
-                if ml.predict_high_chance(features):
-                    amount = risk.next_amount(asset, high_chance=True, payout=payout)
-                    log(f"[{asset}] Entrando {direction} com {amount} — alta_chance=True")
-                    try:
-                        status, order_id = IQ.buy(amount, asset, direction, expiry=1)
-                        result, _ = IQ.check_win(order_id)
-                    except Exception as exc:
-                        log(f"Erro ao executar ordem: {exc}", level="error")
-                        result = False
+                # Confluências de indicadores
+                signals = []
+                if breakout:
+                    signals.append("breakout")
+                if pattern_name:
+                    signals.append("pattern")
+                if volume_ratio > 1.0:
+                    signals.append("volume")
+                if trend != "flat":
+                    signals.append("trend")
+                if df['EMA_CROSS'].iloc[-1]:
+                    signals.append("ema_cross")
+                if (trend == "up" and df['MACD_HIST'].iloc[-1] > 0) or (
+                    trend == "down" and df['MACD_HIST'].iloc[-1] < 0
+                ):
+                    signals.append("macd")
+                if df['ADX14'].iloc[-1] > 20:
+                    signals.append("adx")
+                if (
+                    trend == "up" and last_candle.close > last_candle.SUPERT
+                ) or (
+                    trend == "down" and last_candle.close < last_candle.SUPERT
+                ):
+                    signals.append("supertrend")
+                if (
+                    trend == "up" and last_candle.close > last_candle.VWAP
+                ) or (
+                    trend == "down" and last_candle.close < last_candle.VWAP
+                ):
+                    signals.append("vwap")
+                if ml_high:
+                    signals.append("ml")
 
-                    risk.register_trade(asset, result)
-                    ml.log_trade(features, result)
+                strength = entry_strength(len(signals))
+                if strength == "nenhuma":
+                    continue
 
-                    if result:
-                        daily_wins += 1
+                amount = risk.next_amount(asset, high_chance=strength != "fraca", payout=payout)
+                log(
+                    f"[{asset}] Entrando {direction} com {amount} — confluências:{len(signals)} ({strength})"
+                )
+                try:
+                    status, order_id = IQ.buy(amount, asset, direction, expiry=1)
+                    result, _ = IQ.check_win(order_id)
+                except Exception as exc:
+                    log(f"Erro ao executar ordem: {exc}", level="error")
+                    result = False
+
+                risk.register_trade(asset, result)
+                ml.log_trade(features, result)
+
+                if result:
+                    daily_wins += 1
 
         log("Esperando próximo ciclo...")
         time.sleep(config['timeframe_main'])

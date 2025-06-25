@@ -50,3 +50,14 @@ def load_config(path: str = "config.yaml") -> dict:
     config["email"] = os.getenv("BOT_EMAIL", config.get("email"))
     config["password"] = os.getenv("BOT_PASSWORD", config.get("password"))
     return config
+
+
+def entry_strength(confluence_count: int) -> str:
+    """Classify entry strength based on the number of confluences."""
+    if confluence_count >= 7:
+        return "forte"
+    if confluence_count >= 5:
+        return "media"
+    if confluence_count >= 3:
+        return "fraca"
+    return "nenhuma"
