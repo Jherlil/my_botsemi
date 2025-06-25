@@ -107,12 +107,6 @@ def main():
             avg_volume = df['volume'].rolling(config['volume_period']).mean().iloc[-1]
             volume_ratio = last_candle.volume / avg_volume if avg_volume > 0 else 0
 
-            high_chance_basic = all([
-                breakout,
-                pattern_name,
-                volume_ratio > 1.0,
-                trend != "flat",
-            ])
 
             # Monta features para o modelo de ML
             features = {
@@ -129,12 +123,12 @@ def main():
             }
             ml_high = ml.predict_high_chance(features)
 
-            if breakout and risk.can_trade(asset):
-                # Define direção somente a favor da tendência
+            if risk.can_trade(asset):
                 direction = None
-                if breakout == "breakout_up" and trend == "up":
+                super_dir = "up" if last_candle.close > last_candle.SUPERT else "down"
+                if trend == "up" and super_dir == "up":
                     direction = "call"
-                elif breakout == "breakout_down" and trend == "down":
+                elif trend == "down" and super_dir == "down":
                     direction = "put"
                 if not direction:
                     continue
