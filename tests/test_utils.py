@@ -20,3 +20,20 @@ def test_entry_strength():
     assert entry_strength(3) == "fraca"
     assert entry_strength(5) == "media"
     assert entry_strength(7) == "forte"
+
+
+def test_full_yaml_parsing(tmp_path):
+    cfg = tmp_path / "full.yaml"
+    cfg.write_text(
+        """
+threshold: 10
+active: true
+items:
+  - a
+  - b
+"""
+    )
+    c = load_config(str(cfg))
+    assert c["threshold"] == 10
+    assert c["active"] is True
+    assert c["items"] == ["a", "b"]
