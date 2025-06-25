@@ -2,7 +2,7 @@
 
 ## 🎯 Funcionalidades
 - Operação automática (IQ Option) e confirmação TradingView.
-- Análise técnica: MA, breakout, Fibonacci, suporte/resistência, LTA/LTB, padrões candlestick (TA-Lib).
+- Análise técnica: MA, breakout (usando suporte/resistência com lookback configurável), Fibonacci, LTA/LTB, padrões candlestick (TA-Lib).
 - Confirmação por volume (IQ Option e TradingView).
 - Gestão de risco (normal, martingale, soros) por paridade.
 - Filtro contra notícias de alto impacto.

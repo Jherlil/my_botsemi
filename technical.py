@@ -55,14 +55,20 @@ class TechnicalAnalyzer:
             return "down"
         return "flat"
 
-    def detect_breakout(self, df: pd.DataFrame) -> str:
-        """Detect breakout above resistance or below support."""
-        support = df['low'].min()
-        resistance = df['high'].max()
+    def detect_breakout(self, df: pd.DataFrame, lookback: int = 50) -> str:
+        """Detect breakout above resistance or below support.
+
+        The support and resistance levels are calculated using
+        :py:meth:`support_resistance` which requires at least two touches of
+        each level within ``lookback`` candles.
+        """
+        support, resistance = self.support_resistance(df, lookback)
+        if support is None or resistance is None:
+            return None
         last_close = df['close'].iloc[-1]
-        if last_close > resistance:
+        if resistance is not None and last_close > resistance:
             return "breakout_up"
-        if last_close < support:
+        if support is not None and last_close < support:
             return "breakout_down"
         return None
 
@@ -84,9 +90,36 @@ class TechnicalAnalyzer:
         return patterns
 
     def support_resistance(self, df: pd.DataFrame, lookback: int = 50) -> tuple:
-        """Return recent support and resistance levels using pandas."""
-        support = df['low'].rolling(lookback).min().iloc[-1]
-        resistance = df['high'].rolling(lookback).max().iloc[-1]
+        """Return support and resistance touched at least twice.
+
+        The function searches local minima and maxima within ``lookback``
+        candles and only returns a level if it has been tested two or more
+        times. ``None`` is returned for a level without confirmation.
+        """
+        recent = df.tail(lookback)
+        tolerance = recent['close'].std() * 0.02 if len(recent) > 1 else 0
+
+        lows = recent['low']
+        highs = recent['high']
+
+        local_min = (lows <= lows.shift(1)) & (lows <= lows.shift(-1))
+        local_max = (highs >= highs.shift(1)) & (highs >= highs.shift(-1))
+
+        support = None
+        resistance = None
+
+        if local_min.any():
+            level = lows[local_min].min()
+            touches = (abs(lows - level) <= tolerance).sum()
+            if touches >= 2:
+                support = level
+
+        if local_max.any():
+            level = highs[local_max].max()
+            touches = (abs(highs - level) <= tolerance).sum()
+            if touches >= 2:
+                resistance = level
+
         return support, resistance
 
     def fibonacci_levels(self, df: pd.DataFrame) -> dict:

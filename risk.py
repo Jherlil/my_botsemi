@@ -36,6 +36,7 @@ class RiskManager:
                 "wins_amount": 0,
                 "consecutive_losses": 0,
                 "consecutive_wins": 0,
+                "last_result": None,
             }
             for asset in assets
         }
@@ -58,16 +59,36 @@ class RiskManager:
         return True
 
     def next_amount(self, asset, high_chance=False, payout=1.0):
-        """Return the next order amount for *asset* based on strategy."""
-        a = self.assets[asset]
-        amount = a["current_amount"]
+        """Return the next order amount for *asset* based on strategy.
 
-        # Martingale apenas se high_chance
-        if self.strategy == "martingale" and high_chance:
-            amount = a["current_amount"]
-        elif self.strategy == "soros" and self.use_soros_if_low_payout and payout < self.min_payout_for_soros and high_chance:
-            amount = a["current_amount"]
-        return amount
+        The value ``current_amount`` is updated based on the result of the last
+        trade stored in ``last_result``. Losses increase the stake according to
+        the strategy while wins or triggered limits reset it to ``1``.
+        """
+        a = self.assets[asset]
+
+        # Reset if any global/consecutive limit was hit
+        if not self.can_trade(asset):
+            a["current_amount"] = 1
+            a["last_result"] = None
+            return a["current_amount"]
+
+        if a["last_result"] is not None:
+            if a["last_result"]:
+                a["current_amount"] = 1
+            else:
+                if self.strategy == "martingale" and (
+                    high_chance or not self.use_martingale_if_high_chance
+                ):
+                    a["current_amount"] *= self.martingale_factor
+                elif self.strategy == "soros" and (
+                    not self.use_soros_if_low_payout
+                    or payout >= self.min_payout_for_soros
+                ):
+                    a["current_amount"] *= self.soros_level
+            a["last_result"] = None
+
+        return a["current_amount"]
 
     def register_trade(self, asset, result):
         """Update statistics after a trade finishes."""
@@ -76,15 +97,11 @@ class RiskManager:
             a["wins_amount"] += a["current_amount"]
             a["consecutive_wins"] += 1
             a["consecutive_losses"] = 0
-            a["current_amount"] = 1
         else:
             a["losses_amount"] += a["current_amount"]
             a["consecutive_losses"] += 1
             a["consecutive_wins"] = 0
-            if self.strategy == "martingale":
-                a["current_amount"] *= self.martingale_factor
-            elif self.strategy == "soros":
-                a["current_amount"] *= self.soros_level
-            else:
-                a["current_amount"] = 1
-        log(f"[{asset}] Novo valor: {a['current_amount']} | perdas: {a['losses_amount']} | vitórias seguidas: {a['consecutive_wins']} | perdas seguidas: {a['consecutive_losses']} | ganhos totais: {a['wins_amount']}")
+        a["last_result"] = result
+        log(
+            f"[{asset}] Valor atual: {a['current_amount']} | perdas: {a['losses_amount']} | vitórias seguidas: {a['consecutive_wins']} | perdas seguidas: {a['consecutive_losses']} | ganhos totais: {a['wins_amount']}"
+        )

@@ -33,3 +33,4 @@ news_buffer_minutes: 60
 use_martingale_if_high_chance: true   # Martingale só em sinais com altíssima probabilidade
 use_soros_if_low_payout: true         # Soros apenas se payout < 0.80 e sinal altíssima probabilidade
 min_payout_for_soros: 0.80            # Limite mínimo para soros
+breakout_lookback: 50
