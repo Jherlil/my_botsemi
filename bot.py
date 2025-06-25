@@ -98,7 +98,7 @@ def main():
             df = technical.calculate_moving_averages(df)
             df = technical.add_m5_indicators(df)
 
-            breakout = technical.detect_breakout(df)
+            breakout = technical.detect_breakout(df, lookback=config.get('breakout_lookback', 50))
             trend = technical.detect_trend(df)
             patterns = technical.detect_candlestick_patterns(df)
             pattern_name = patterns[0][0] if patterns else None
